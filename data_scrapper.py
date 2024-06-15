@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import re
+from fake_useragent import UserAgent
 
 
 def get_race_dates():
@@ -42,13 +43,42 @@ def get_race_card(race_date):
         # URL of the HKJC race card page
         url = f'https://racing.hkjc.com/racing/information/English/Racing/RaceCard.aspx?RaceDate={race_date}&RaceNo={race_no}'
 
+        # Send a GET request to the page and get the HTML content
+        ua = UserAgent(browsers=['edge', 'chrome', 'firefox'])
+        user_agent = ua.random
+        headers = {'user-agent': user_agent}
+
         # Send a GET request to the URL
-        response = requests.get(url)
+        response = requests.get(url, headers=headers)
 
         # Check if the request was successful
         if response.status_code == 200:
             # Parse the HTML content using BeautifulSoup
             soup = BeautifulSoup(response.text, 'html.parser')
+
+            # Extract the race name
+            race_name = soup.find('span', class_='font_wb').text.strip()
+            remaining_text = soup.find('div', class_='f_fs13').decode_contents().split('<br>')
+            date_location_time = remaining_text[1].strip()
+            race_date, race_location, race_time = [item.strip() for item in date_location_time.split(',')]
+            course_details = remaining_text[2].strip()
+            course_type, course_details = course_details.split(',')
+            course, distance, condition = [item.strip() for item in course_details.split(',')]
+            prize_and_type = remaining_text[3].strip().replace('Prize Money: ', '')
+            prize_money, _, race_type = [item.strip() for item in prize_and_type.split(',')]
+
+            # Create a dictionary with the extracted data
+            race_data = {
+                "Race Name": race_name,
+                "Race Date": race_date,
+                "Race Location": race_location,
+                "Race Time": race_time,
+                "Course Type": course_type.strip(),
+                "Course": course.strip(),
+                "Distance": distance.strip(),
+                "Condition": condition.strip(),
+                "Race Type": race_type
+            }
 
             # Find the table containing the race card data
             race_table = soup.find('table', id='racecardlist')
@@ -71,11 +101,11 @@ def get_race_card(race_date):
                     'days_last_run': cols[21].text.strip(),
                     'gear': cols[22].text.strip()
                 }
+                horse_info.update(race_data)
                 race_card.append(horse_info)
         else:
             print(f"Failed to retrieve the page. Status code: {response.status_code}")
             return None
-
 
     # Convert race card list to a DataFrame
     df = pd.DataFrame(race_card)
@@ -120,8 +150,13 @@ def get_race_result(race_date):
         # Define the URL of the race results page
         url = f'https://racing.hkjc.com/racing/information/English/Racing/LocalResults.aspx?RaceDate={race_date}&RaceNo={race_no}'
 
+        # Send a GET request to the page and get the HTML content
+        ua = UserAgent(browsers=['edge', 'chrome', 'firefox'])
+        user_agent = ua.random
+        headers = {'user-agent': user_agent}
+
         # Send a GET request to the URL
-        response = requests.get(url)
+        response = requests.get(url, headers=headers)
 
         # Check if the request was successful
         if response.status_code == 200:
