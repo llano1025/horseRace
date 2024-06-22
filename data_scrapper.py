@@ -59,90 +59,97 @@ def get_race_dates():
 
 
 def get_race_card(race_date):
+    # try:
+    # Find the maximum race number
+    max_race_no = get_race_number(race_date, False)
 
-    if is_race_card_available():
-        # Find the maximum race number
-        max_race_no = get_race_number(race_date, False)
+    # Initialize a list to store race card information
+    race_card = []
+    date_obj = datetime.strptime(race_date, '%d/%m/%Y')
+    format_date = date_obj.strftime('%Y/%m/%d')
 
-        # Initialize a list to store race card information
-        race_card = []
+    for race_no in range(1, max_race_no):
+        # URL of the HKJC race card page
+        url = f'https://racing.hkjc.com/racing/information/English/Racing/RaceCard.aspx?RaceDate={format_date}&RaceNo={race_no}'
 
-        for race_no in range(1, max_race_no):
-            # URL of the HKJC race card page
-            url = f'https://racing.hkjc.com/racing/information/English/Racing/RaceCard.aspx?RaceDate={race_date}&RaceNo={race_no}'
+        # Send a GET request to the page and get the HTML content
+        ua = UserAgent(browsers=['edge', 'chrome', 'firefox'])
+        user_agent = ua.random
+        headers = {'user-agent': user_agent}
 
-            # Send a GET request to the page and get the HTML content
-            ua = UserAgent(browsers=['edge', 'chrome', 'firefox'])
-            user_agent = ua.random
-            headers = {'user-agent': user_agent}
+        # Send a GET request to the URL
+        response = requests.get(url, headers=headers)
 
-            # Send a GET request to the URL
-            response = requests.get(url, headers=headers)
+        # Check if the request was successful
+        if response.status_code == 200:
+            # Parse the HTML content using BeautifulSoup
+            soup = BeautifulSoup(response.text, 'html.parser')
 
-            # Check if the request was successful
-            if response.status_code == 200:
-                # Parse the HTML content using BeautifulSoup
-                soup = BeautifulSoup(response.text, 'html.parser')
-
-                # Extract the race name
-                race_name = soup.find('span', class_='font_wb').text.strip()
-                remaining_text = soup.find('div', class_='f_fs13').decode_contents().split('<br>')
-                date_location_time = remaining_text[1].strip()
-                race_date, race_location, race_time = [item.strip() for item in date_location_time.split(',')]
-                course_details = remaining_text[2].strip()
-                course_type, course_details = course_details.split(',')
-                course, distance, condition = [item.strip() for item in course_details.split(',')]
-                prize_and_type = remaining_text[3].strip().replace('Prize Money: ', '')
-                prize_money, _, race_type = [item.strip() for item in prize_and_type.split(',')]
-
-                # Create a dictionary with the extracted data
-                race_data = {
-                    "Race Name": race_name,
-                    "Race Date": race_date,
-                    "Race Location": race_location,
-                    "Race Time": race_time,
-                    "Course Type": course_type.strip(),
-                    "Course": course.strip(),
-                    "Distance": distance.strip(),
-                    "Condition": condition.strip(),
-                    "Race Type": race_type
-                }
-
-                # Find the table containing the race card data
-                race_table = soup.find('table', id='racecardlist')
-
-                # Extract data from each row of the table
-                for row in race_table.find_all('tr')[3:]:  # Skip the header row
-                    cols = row.find_all('td')
-                    horse_info = {
-                        'Horse No.': cols[0].text.strip(),
-                        'Horse': cols[3].text.strip(),
-                        'Brand No.': cols[4].text.strip(),
-                        'Act. Wt.': cols[5].text.strip(),
-                        'Jockey': cols[6].text.strip(),
-                        'Dr.': cols[8].text.strip(),
-                        'Trainer': cols[9].text.strip(),
-                        'Declar. Horse Wt.': cols[13].text.strip(),
-                        'Age': cols[16].text.strip(),
-                        'Sex': cols[18].text.strip(),
-                        'Season Stake': cols[19].text.strip(),
-                        'Days since Last Run': cols[21].text.strip(),
-                        'Gear': cols[22].text.strip()
-                    }
-                    horse_info.update(race_data)
-                    race_card.append(horse_info)
+            # Extract the race name
+            race_name = soup.find('span', class_='font_wb').text.strip()
+            remaining_text = soup.find('div', class_='f_fs13').decode_contents().split('<br>')
+            remaining_text = remaining_text[0].split('<br/>')
+            match = re.search(r'Race (\d+)', remaining_text[0])
+            if match:
+                race_name = int(match.group(1))
             else:
-                print(f"Failed to retrieve the page. Status code: {response.status_code}")
-                return None
+                race_name = ''
+            race_location = remaining_text[1].split(',')[-2].strip()
+            race_time = remaining_text[1].split(',')[-1].strip()
+            course_details = remaining_text[2].strip()
+            course = ' - '.join(course_details.split(',')[0:-2])
+            distance = course_details.split(',')[-2].strip()
+            condition = course_details.split(',')[-1].strip()
+            prize_and_type = remaining_text[3].strip().replace('Prize Money: ', '')
+            prize_money, _, race_type = [item.strip() for item in prize_and_type.split(', ')]
 
-        # Convert race card list to a DataFrame
-        df = pd.DataFrame(race_card)
-        # Output the data
-        return df
+            # Create a dictionary with the extracted data
+            race_data = {
+                "Race Name": race_name,
+                "Race Date": race_date,
+                "Race Location": race_location,
+                "Race Time": race_time,
+                "Course": course.strip(),
+                "Distance": distance.strip(),
+                "Going": condition.strip(),
+                "Race Type": race_type
+            }
 
-    else:
-        print("Race Card not available")
-        sys.exit()
+            # Find the table containing the race card data
+            race_table = soup.find('table', id='racecardlist')
+
+            # Extract data from each row of the table
+            for row in race_table.find_all('tr')[3:]:  # Skip the header row
+                cols = row.find_all('td')
+                horse_info = {
+                    'Horse No.': cols[0].text.strip(),
+                    'Horse': cols[3].text.strip(),
+                    'Brand No.': cols[4].text.strip(),
+                    'Act. Wt.': cols[5].text.strip(),
+                    'Jockey': cols[6].text.strip(),
+                    'Dr.': cols[8].text.strip(),
+                    'Trainer': cols[9].text.strip(),
+                    'Declar. Horse Wt.': cols[13].text.strip(),
+                    'Age': cols[16].text.strip(),
+                    'Sex': cols[18].text.strip(),
+                    'Season Stake': cols[19].text.strip(),
+                    'Days since Last Run': cols[21].text.strip(),
+                    'Gear': cols[22].text.strip()
+                }
+                horse_info.update(race_data)
+                race_card.append(horse_info)
+        else:
+            print(f"Failed to retrieve the page. Status code: {response.status_code}")
+            return None
+
+    # Convert race card list to a DataFrame
+    df = pd.DataFrame(race_card)
+    # Output the data
+    return df
+
+    # except Exception:
+    #     print("Race Card not available")
+    #     sys.exit()
 
 
 def get_race_number(race_date, IS_RACE_RESULT):
@@ -205,6 +212,8 @@ def get_race_result(race_date):
 
             text_str2 = soup.find('tbody', class_='f_fs13').find_all('tr')
             race_class_distance = text_str2[1].find_all('td')[0].text.strip()
+            _class = race_class_distance.split(' - ')[0]
+            distance = race_class_distance.split(' - ')[1]
             going = text_str2[1].find_all('td')[2].text.strip()
             course = text_str2[2].find_all('td')[2].text.strip()
 
@@ -212,13 +221,13 @@ def get_race_result(race_date):
             for row in table.find_all('tr')[0:1]:  # Skip the header row
                 headers = row.find_all('td')
                 headers = [header.text.strip() for header in headers]
-                headers.extend(['Race Date', 'Race Location', 'Race Class Distance', 'Going', 'Course'])
+                headers.extend(['Race Date', 'Race Location', 'Class', 'Distance', 'Going', 'Course'])
 
             # Extract table rows
             for row in table.find_all('tr')[1:]:  # Skip the header row
                 cols = row.find_all('td')
                 cols = [col.text.strip() for col in cols]
-                cols.extend([race_date, race_location, race_class_distance, going, course])
+                cols.extend([race_date, race_location, _class, distance, going, course])
                 rows.append(cols)
 
             # Introduce a time delay between requests
@@ -236,32 +245,108 @@ def get_race_result(race_date):
     return df
 
 
-def save_dataframe_to_csv(dataframe, path):
+def get_latest_csv(directory):
+    csv_files = [f for f in os.listdir(directory) if f.endswith('.csv')]
+    if not csv_files:
+        return None
+
+    date_files = {}
+    for file in csv_files:
+        match = re.match(r'(\d{4}\.\d{2}\.\d{2})_race_result\.csv', file)
+        if match:
+            date_str = match.group(1)
+            date_obj = datetime.strptime(date_str, '%Y.%m.%d')
+            date_files[date_obj] = file
+
+    if date_files:
+        latest_date = max(date_files.keys())
+        return date_files[latest_date]
+    return None
+
+
+def filename_to_date(filename):
+    match = re.match(r'(\d{4}\.\d{2}\.\d{2})_race_result\.csv', filename)
+    if match:
+        date_str = match.group(1)
+        return datetime.strptime(date_str, '%Y.%m.%d')
+    return None
+
+
+def filter_dates(dates_list, comparison_date):
+    filtered_dates = [date for date in dates_list if datetime.now() > datetime.strptime(date.split("\r")[0], '%d/%m/%Y') > comparison_date]
+    return filtered_dates
+
+
+def get_updated_dates(directory, dates_list):
+    latest_file = get_latest_csv(directory)
+    if latest_file:
+        latest_date = filename_to_date(latest_file)
+        print(f"Latest file: {latest_file}")
+        print(f"Latest date: {latest_date}")
+
+        filtered_dates = filter_dates(dates_list, latest_date)
+        print(f"Dates greater than {latest_date}: {filtered_dates}")
+        return filtered_dates, True
+    else:
+        print("No CSV files found in the directory.")
+        return dates_list, False
+
+
+def save_dataframe_to_csv(dataframe, path, IS_MERGE_REQ):
     try:
+        #  Check if merge with existing data is required
+        if IS_MERGE_REQ and dataframe:
+            latest_file = get_latest_csv(path)
+            dataframe_master = pd.read_csv(latest_file)
+            dataframe = pd.concat([dataframe, dataframe_master])
+
         # Create the directory if it does not exist
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         # Save the DataFrame to a CSV file
-        dataframe.to_csv(os.path.join(path, 'race_result.csv'), index=False)
+        today = datetime.now()
+        dataframe.to_csv(os.path.join(path, f'{today.year}.{today.month}.{today.day}_race_result.csv'), index=False)
         print(f"DataFrame successfully saved to {path}")
+
     except Exception as e:
         print(f"An error occurred while saving the DataFrame: {e}")
 
 
-# Programme initiation
-path = './pastRaceResult/'
+def save_past_race_result():
+    # Programme initiation
+    path = './pastRaceResult/'
+
+    # Get the past race result for race dates
+    race_dates = get_race_dates()
+    race_dates, IS_MERGE_REQ = get_updated_dates(path, race_dates)
+    race_result_list = []
+    for race_date in race_dates:
+        try:
+            race_result = get_race_result(race_date)
+        except Exception as exception:
+            print(exception)
+            continue
+        race_result_list.append(race_result)
+    if race_result_list:
+        race_results = pd.concat(race_result_list)
+    else:
+        race_results = None
+
+    # Save the result into .csv
+    save_dataframe_to_csv(race_results, path, IS_MERGE_REQ)
+
+
+def get_future_race_card():
+    # Get the past race result for race dates
+    race_dates = get_race_dates()
+    future_dates = [date for date in race_dates if
+                      datetime.now() < datetime.strptime(date.split("\r")[0], '%d/%m/%Y')]
+    for date in future_dates:
+        dataframe = get_race_card(date)
+        return dataframe
+
+
+# # save_past_race_result()
+# df = get_future_race_card()
 race_dates = get_race_dates()
-
-# Get the past race result for race dates
-race_result_list = []
-for race_date in race_dates:
-    try:
-        race_result = get_race_result(race_date)
-    except Exception as exception:
-        print(exception)
-        continue
-    race_result_list.append(race_result)
-race_results = pd.concat(race_result_list)
-
-# Save the result into .csv
-save_dataframe_to_csv(race_results, path)
+df = get_race_card(race_dates[0])
