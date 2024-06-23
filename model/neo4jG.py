@@ -4,6 +4,7 @@ from neo4j import GraphDatabase
 # Load the CSV file
 file_path = 'G:/Git/horseRace/data/pastRaceResult/2024.06.17_race_result.csv'
 df = pd.read_csv(file_path)
+df = df.dropna(subset=['Pla.'])
 uri = "bolt://localhost:7687"  # Update this with your Neo4j instance URI
 user = "neo4j"  # Your Neo4j username
 password = "password"  # Your Neo4j password
