@@ -255,6 +255,43 @@ def get_race_result(race_date):
     return df
 
 
+def search_horse_by_name(horse_name):
+    search_url = "https://racing.hkjc.com/racing/information/english/Horse/SelectHorse.aspx"
+    params = {
+        'keyword': horse_name
+    }
+
+    response = requests.get(search_url, params=params)
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    # Find the horse in the search results
+    horse_link = soup.find('a', href=True, text=horse_name)
+    if horse_link:
+        horse_url = "https://racing.hkjc.com" + horse_link['href']
+        return horse_url
+    else:
+        return None
+
+
+def get_horse_details(horse_url):
+    response = requests.get(horse_url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    # Example extraction (adjust selectors based on actual page structure)
+    horse_name = soup.find('h1', class_='title').text.strip()
+    details_table = soup.find('table', class_='f_tac')
+    details = {}
+
+    for row in details_table.find_all('tr'):
+        cols = row.find_all('td')
+        if len(cols) == 2:
+            detail_key = cols[0].text.strip()
+            detail_value = cols[1].text.strip()
+            details[detail_key] = detail_value
+
+    return horse_name, details
+
+
 def get_latest_csv(directory):
     csv_files = [f for f in os.listdir(directory) if f.endswith('.csv')]
     if not csv_files:
