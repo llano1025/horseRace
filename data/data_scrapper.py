@@ -250,6 +250,11 @@ def get_race_result(race_date):
 
     # Create a DataFrame
     df = pd.DataFrame(rows, columns=headers)
+    df[['Horse', 'Brand No.']] = df['Horse'].str.extract(r'(.+?)\xa0\((.+?)\)')
+    columns = list(df.columns)
+    last_column = columns.pop()
+    columns.insert(3, last_column)
+    df = df[columns]
 
     # Print the DataFrame
     return df
@@ -342,7 +347,7 @@ def get_updated_dates(directory, dates_list):
 def save_dataframe_to_csv(dataframe, path, IS_MERGE_REQ):
     try:
         #  Check if merge with existing data is required
-        if IS_MERGE_REQ and dataframe:
+        if IS_MERGE_REQ:
             latest_file = get_latest_csv(path)
             dataframe_master = pd.read_csv(os.path.join(path, latest_file))
             dataframe = pd.concat([dataframe, dataframe_master])
@@ -361,7 +366,7 @@ def save_dataframe_to_csv(dataframe, path, IS_MERGE_REQ):
 
 def save_past_race_result():
     # Programme initiation
-    path = '.pastRaceResult/'
+    path = './data/pastRaceResult/'
 
     # Get the past race result for race dates
     race_dates = get_race_dates()
