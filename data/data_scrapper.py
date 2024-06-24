@@ -278,23 +278,87 @@ def search_horse_by_name(horse_name):
         return None
 
 
-def get_horse_details(horse_url):
-    response = requests.get(horse_url)
-    soup = BeautifulSoup(response.text, 'html.parser')
+def get_horse_details():
+    # Extract unique 'Brand No.' values
+    latest_file = get_latest_csv('./data/pastRaceResult/')
+    df = pd.read_csv(os.path.join('./data/pastRaceResult/', latest_file))
+    brand_numbers = df['Brand No.'].unique()
 
-    # Example extraction (adjust selectors based on actual page structure)
-    horse_name = soup.find('h1', class_='title').text.strip()
-    details_table = soup.find('table', class_='f_tac')
-    details = {}
+    # Generate years from the current year to 2018
+    current_year = datetime.now().year
+    years = list(range(current_year, 2017, -1))
+    df_list = []
 
-    for row in details_table.find_all('tr'):
-        cols = row.find_all('td')
-        if len(cols) == 2:
-            detail_key = cols[0].text.strip()
-            detail_value = cols[1].text.strip()
-            details[detail_key] = detail_value
+    for brand_no in brand_numbers:
+        for year in years:
+            url = f"https://racing.hkjc.com/racing/information/english/Horse/OtherHorse.aspx?HorseId=HK_{str(year)}_{brand_no}"
 
-    return horse_name, details
+            # Send a GET request to the page and get the HTML content
+            ua = UserAgent(browsers=['edge', 'chrome', 'firefox'])
+            user_agent = ua.random
+            headers = {'user-agent': user_agent}
+
+            # Send a GET request to the URL
+            response = requests.get(url, headers=headers)
+
+            # Check if the request was successful
+            if response.status_code == 200:
+                # Parse the HTML content using BeautifulSoup
+                soup = BeautifulSoup(response.content, 'html.parser')
+
+                # Step 5: Locate the table with class 'horseProfile'
+                table = soup.find('table', class_='horseProfile')
+
+                if not table:
+                    print("Horse profile table not found.")
+                    continue  # Exit the inner loop if table is not found
+
+                horse_data = {}
+
+                # Extract the horse name and ID from the title
+                title = table.find('span', class_='title_text')
+                if title:
+                    horse_data['Horse Name and ID'] = title.text.strip()
+                    print(horse_data['Horse Name and ID'])
+
+                # Extract data from the first column (left side)
+                first_col = table.find_all('td', style='width: 280px;')[0]
+                horse_data['Image URL'] = first_col.find('img')['src'] if first_col.find('img') else None
+
+                # Extract data from the second column (middle)
+                second_col = table.find_all('td', valign='top', style='width: 260px;')[0]
+                rows = second_col.find_all('tr')
+                for row in rows:
+                    cells = row.find_all('td')
+                    if len(cells) == 3:
+                        key = cells[0].text.strip()
+                        value = cells[2].text.strip()
+                        horse_data[key] = value
+
+                # Extract data from the third column (right side)
+                third_col = table.find_all('td', valign='top', style='width: 280px;')[0]
+                rows = third_col.find_all('tr')
+                for row in rows:
+                    cells = row.find_all('td')
+                    if len(cells) == 3:
+                        key = cells[0].text.strip()
+                        value = cells[2].text.strip()
+                        horse_data[key] = value
+
+                df_list.append(pd.DataFrame([horse_data]))
+                if horse_data:
+                    break  # Exit the inner loop if data is found and appended
+
+    horse_df = pd.concat(df_list)
+    # Create the directory if it does not exist
+    os.makedirs(os.path.dirname('./data/horseInformation/'), exist_ok=True)
+
+    # Save the DataFrame to a CSV file
+    today = datetime.now()
+    horse_df.to_csv(os.path.join('./data/horseInformation/', f'{today.year}.{today.month}.{today.day}_horse_info.csv'), index=False)
+    print(f"DataFrame successfully saved to {'./data/horseInformation/'}")
+
+    return horse_df
 
 
 def get_latest_csv(directory):
