@@ -351,17 +351,23 @@ def get_horse_details():
                     break  # Exit the inner loop if data is found and appended
         i = i + 1
         if i % 50 == 0:
-            horse_df = pd.concat(df_list)
-            # Create the directory if it does not exist
-            os.makedirs(os.path.dirname('./data/horseInformation/'), exist_ok=True)
+            horse_df = save_horse_info(df_list)
 
-            # Save the DataFrame to a CSV file
-            today = datetime.now()
-            horse_df.to_csv(
-                os.path.join('./data/horseInformation/', f'{today.year}.{today.month}.{today.day}_horse_info.csv'),
-                index=False)
-            print(f"DataFrame successfully saved to {'./data/horseInformation/'}")
+    horse_df = save_horse_info(df_list)
+    return horse_df
 
+
+def save_horse_info(df_list):
+    horse_df = pd.concat(df_list)
+    # Create the directory if it does not exist
+    os.makedirs(os.path.dirname('./data/horseInformation/'), exist_ok=True)
+
+    # Save the DataFrame to a CSV file
+    today = datetime.now()
+    horse_df.to_csv(
+        os.path.join('./data/horseInformation/', f'{today.year}.{today.month}.{today.day}_horse_info.csv'),
+        index=False)
+    print(f"DataFrame successfully saved to {'./data/horseInformation/'}")
     return horse_df
 
 
