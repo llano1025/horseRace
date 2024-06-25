@@ -288,6 +288,7 @@ def get_horse_details():
     current_year = datetime.now().year
     years = list(range(current_year, 2017, -1))
     df_list = []
+    i = 0
 
     for brand_no in brand_numbers:
         for year in years:
@@ -306,7 +307,7 @@ def get_horse_details():
                 # Parse the HTML content using BeautifulSoup
                 soup = BeautifulSoup(response.content, 'html.parser')
 
-                # Step 5: Locate the table with class 'horseProfile'
+                # Locate the table with class 'horseProfile'
                 table = soup.find('table', class_='horseProfile')
 
                 if not table:
@@ -348,15 +349,18 @@ def get_horse_details():
                 df_list.append(pd.DataFrame([horse_data]))
                 if horse_data:
                     break  # Exit the inner loop if data is found and appended
+        i = i + 1
+        if i % 50 == 0:
+            horse_df = pd.concat(df_list)
+            # Create the directory if it does not exist
+            os.makedirs(os.path.dirname('./data/horseInformation/'), exist_ok=True)
 
-    horse_df = pd.concat(df_list)
-    # Create the directory if it does not exist
-    os.makedirs(os.path.dirname('./data/horseInformation/'), exist_ok=True)
-
-    # Save the DataFrame to a CSV file
-    today = datetime.now()
-    horse_df.to_csv(os.path.join('./data/horseInformation/', f'{today.year}.{today.month}.{today.day}_horse_info.csv'), index=False)
-    print(f"DataFrame successfully saved to {'./data/horseInformation/'}")
+            # Save the DataFrame to a CSV file
+            today = datetime.now()
+            horse_df.to_csv(
+                os.path.join('./data/horseInformation/', f'{today.year}.{today.month}.{today.day}_horse_info.csv'),
+                index=False)
+            print(f"DataFrame successfully saved to {'./data/horseInformation/'}")
 
     return horse_df
 
@@ -389,7 +393,8 @@ def filename_to_date(filename):
 
 
 def filter_dates(dates_list, comparison_date):
-    filtered_dates = [date for date in dates_list if datetime.now() > datetime.strptime(date.split("\r")[0], '%d/%m/%Y') > comparison_date]
+    filtered_dates = [date for date in dates_list if
+                      datetime.now() > datetime.strptime(date.split("\r")[0], '%d/%m/%Y') > comparison_date]
     return filtered_dates
 
 
@@ -456,7 +461,7 @@ def get_future_race_card():
     # Get the past race result for race dates
     race_dates = get_race_dates()
     future_dates = [date for date in race_dates if
-                      datetime.now() < datetime.strptime(date.split("\r")[0], '%d/%m/%Y')]
+                    datetime.now() < datetime.strptime(date.split("\r")[0], '%d/%m/%Y')]
     for date in future_dates:
         dataframe = get_race_card(date)
         return dataframe
