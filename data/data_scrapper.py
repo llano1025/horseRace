@@ -335,9 +335,11 @@ def get_horse_details():
         i = i + 1
         if i % 50 == 0:
             horse_df = pd.concat(df_list)
+            horse_df = reformat_horse_info(horse_df)
             save_horse_info(horse_df)
 
     horse_df = pd.concat(df_list)
+    horse_df = reformat_horse_info(horse_df)
     save_horse_info(horse_df)
     return horse_df
 
@@ -360,7 +362,6 @@ def save_horse_info(horse_df):
     os.makedirs(os.path.dirname('./data/horseInformation/'), exist_ok=True)
 
     # Save the DataFrame to a CSV file
-    today = datetime.now()
     current_date = datetime.now().strftime("%Y.%m.%d")
     horse_df.to_csv(
         os.path.join('./data/horseInformation/', f'{current_date}_horse_info.csv'),
@@ -428,8 +429,8 @@ def save_dataframe_to_csv(dataframe, path, IS_MERGE_REQ):
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         # Save the DataFrame to a CSV file
-        today = datetime.now()
-        dataframe.to_csv(os.path.join(path, f'{today.strftime("%Y")}.{today.strftime("%m")}.{today.strftime("%d")}_race_result.csv'), index=False)
+        current_date = datetime.now().strftime("%Y.%m.%d")
+        dataframe.to_csv(os.path.join(path, f'{current_date}_race_result.csv'), index=False)
         print(f"DataFrame successfully saved to {path}")
 
     except Exception as e:
