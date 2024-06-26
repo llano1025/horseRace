@@ -9,6 +9,7 @@ import sys
 import pytz
 import time
 import random
+import numpy as np
 
 
 def is_race_card_available():
@@ -260,24 +261,6 @@ def get_race_result(race_date):
     return df
 
 
-def search_horse_by_name(horse_name):
-    search_url = "https://racing.hkjc.com/racing/information/english/Horse/SelectHorse.aspx"
-    params = {
-        'keyword': horse_name
-    }
-
-    response = requests.get(search_url, params=params)
-    soup = BeautifulSoup(response.text, 'html.parser')
-
-    # Find the horse in the search results
-    horse_link = soup.find('a', href=True, text=horse_name)
-    if horse_link:
-        horse_url = "https://racing.hkjc.com" + horse_link['href']
-        return horse_url
-    else:
-        return None
-
-
 def get_horse_details():
     # Extract unique 'Brand No.' values
     latest_file = get_latest_csv('./data/pastRaceResult/')
@@ -351,24 +334,38 @@ def get_horse_details():
                     break  # Exit the inner loop if data is found and appended
         i = i + 1
         if i % 50 == 0:
-            horse_df = save_horse_info(df_list)
+            horse_df = pd.concat(df_list)
+            save_horse_info(horse_df)
 
-    horse_df = save_horse_info(df_list)
+    horse_df = pd.concat(df_list)
+    save_horse_info(horse_df)
     return horse_df
 
 
-def save_horse_info(df_list):
-    horse_df = pd.concat(df_list)
+def reformat_horse_info(df):
+    # Extract the parts with three sets of parentheses
+    df[['Horse', 'Brand No.', 'Status']] = df['Horse Name and ID'].str.extract(r'(.+?)\s+\((.+?)\)(?:\s+\((.+?)\))?')
+    df['Status'] = np.where(df['Horse Name and ID'].str.contains(r'\((.+?)\)\s+\((.+?)\)'), df['Status'], np.nan)
+    df[['Country of Origin (1)', 'Age']] = df['Country of Origin / Age'].str.split(' / ', expand=True)
+    df[['Color', 'Sex']] = df['Colour / Sex'].str.split(' / ', 1, expand=True)
+    df['Sex'] = df['Sex'].apply(lambda x: x.split(' / ')[-1] if ' / ' in x else x)
+    df.rename(columns={'Country of Origin': 'Country of Origin (2)'}, inplace=True)
+    df['Country of Origin'] = df['Country of Origin (1)'].fillna(df['Country of Origin (2)'])
+    df = df.drop(columns=['Country of Origin (1)', 'Country of Origin (2)'])
+    return df
+
+
+def save_horse_info(horse_df):
     # Create the directory if it does not exist
     os.makedirs(os.path.dirname('./data/horseInformation/'), exist_ok=True)
 
     # Save the DataFrame to a CSV file
     today = datetime.now()
+    current_date = datetime.now().strftime("%Y.%m.%d")
     horse_df.to_csv(
-        os.path.join('./data/horseInformation/', f'{today.year}.{today.month}.{today.day}_horse_info.csv'),
+        os.path.join('./data/horseInformation/', f'{current_date}_horse_info.csv'),
         index=False)
     print(f"DataFrame successfully saved to {'./data/horseInformation/'}")
-    return horse_df
 
 
 def get_latest_csv(directory):
@@ -378,7 +375,7 @@ def get_latest_csv(directory):
 
     date_files = {}
     for file in csv_files:
-        match = re.match(r'(\d{4}\.\d{2}\.\d{2})_race_result\.csv', file)
+        match = re.match(r'(\d{4}\.\d{2}\.\d{2})_(race_result|horse_info)\.csv', file)
         if match:
             date_str = match.group(1)
             date_obj = datetime.strptime(date_str, '%Y.%m.%d')
@@ -432,7 +429,7 @@ def save_dataframe_to_csv(dataframe, path, IS_MERGE_REQ):
 
         # Save the DataFrame to a CSV file
         today = datetime.now()
-        dataframe.to_csv(os.path.join(path, f'{today.year}.{today.month}.{today.day}_race_result.csv'), index=False)
+        dataframe.to_csv(os.path.join(path, f'{today.strftime("%Y")}.{today.strftime("%m")}.{today.strftime("%d")}_race_result.csv'), index=False)
         print(f"DataFrame successfully saved to {path}")
 
     except Exception as e:
