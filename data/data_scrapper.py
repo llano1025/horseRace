@@ -262,10 +262,21 @@ def get_race_result(race_date):
 
 
 def get_horse_details():
-    # Extract unique 'Brand No.' values
-    latest_file = get_latest_csv('./data/pastRaceResult/')
-    df = pd.read_csv(os.path.join('./data/pastRaceResult/', latest_file))
-    brand_numbers = df['Brand No.'].unique()
+    # Extract unique 'Brand No.' values from past race result
+    latest_result = get_latest_csv('./data/pastRaceResult/')
+    df = pd.read_csv(os.path.join('./data/pastRaceResult/', latest_result))
+    brand_numbers_result = df['Brand No.'].unique()
+
+    #  Extract unique "Brand No." values from horse information
+    latest_horseinfo = get_latest_csv('./data/horseInformation/')
+    if latest_horseinfo:
+        df = pd.read_csv(os.path.join('./data/horseInformation/', latest_horseinfo))
+        brand_numbers_info = df['Brand No.'].unique()
+        brand_numbers = set(brand_numbers_result) - set(brand_numbers_info)
+        IS_MERGE_REQ = True
+    else:
+        brand_numbers = brand_numbers_result
+        IS_MERGE_REQ = False
 
     # Generate years from the current year to 2018
     current_year = datetime.now().year
@@ -336,11 +347,11 @@ def get_horse_details():
         if i % 50 == 0:
             horse_df = pd.concat(df_list)
             horse_df = reformat_horse_info(horse_df)
-            save_horse_info(horse_df)
+            save_horse_info(horse_df, IS_MERGE_REQ)
 
     horse_df = pd.concat(df_list)
     horse_df = reformat_horse_info(horse_df)
-    save_horse_info(horse_df)
+    save_horse_info(horse_df, IS_MERGE_REQ)
     return horse_df
 
 
@@ -348,25 +359,36 @@ def reformat_horse_info(df):
     # Extract the parts with three sets of parentheses
     df[['Horse', 'Brand No.', 'Status']] = df['Horse Name and ID'].str.extract(r'(.+?)\s+\((.+?)\)(?:\s+\((.+?)\))?')
     df['Status'] = np.where(df['Horse Name and ID'].str.contains(r'\((.+?)\)\s+\((.+?)\)'), df['Status'], np.nan)
-    df[['Country of Origin (1)', 'Age']] = df['Country of Origin / Age'].str.split(' / ', expand=True)
+    try:
+        df[['Country of Origin (1)', 'Age']] = df['Country of Origin / Age'].str.split(' / ', expand=True)
+        df.rename(columns={'Country of Origin': 'Country of Origin (2)'}, inplace=True)
+        df['Country of Origin'] = df['Country of Origin (1)'].fillna(df['Country of Origin (2)'])
+        df = df.drop(columns=['Country of Origin (1)', 'Country of Origin (2)'])
+    except KeyError as exception:
+        print(exception)
     df[['Color', 'Sex']] = df['Colour / Sex'].str.split(' / ', 1, expand=True)
     df['Sex'] = df['Sex'].apply(lambda x: x.split(' / ')[-1] if ' / ' in x else x)
-    df.rename(columns={'Country of Origin': 'Country of Origin (2)'}, inplace=True)
-    df['Country of Origin'] = df['Country of Origin (1)'].fillna(df['Country of Origin (2)'])
-    df = df.drop(columns=['Country of Origin (1)', 'Country of Origin (2)'])
     return df
 
 
-def save_horse_info(horse_df):
+def save_horse_info(horse_df, IS_MERGE_REQ):
+    path = './data/horseInformation/'
+
+    #  Load past horse information
+    if IS_MERGE_REQ:
+        latest_file = get_latest_csv(path)
+        dataframe_master = pd.read_csv(os.path.join(path, latest_file))
+        horse_df = pd.concat([horse_df, dataframe_master])
+
     # Create the directory if it does not exist
-    os.makedirs(os.path.dirname('./data/horseInformation/'), exist_ok=True)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
 
     # Save the DataFrame to a CSV file
     current_date = datetime.now().strftime("%Y.%m.%d")
     horse_df.to_csv(
-        os.path.join('./data/horseInformation/', f'{current_date}_horse_info.csv'),
+        os.path.join(path, f'{current_date}_horse_info.csv'),
         index=False)
-    print(f"DataFrame successfully saved to {'./data/horseInformation/'}")
+    print(f"DataFrame successfully saved to {path}")
 
 
 def get_latest_csv(directory):

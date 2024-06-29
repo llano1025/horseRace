@@ -7,10 +7,7 @@ import os
 # ds.get_horse_details()
 # ds.save_past_race_result()
 
-latest_file = ds.get_latest_csv('./data/horseInformation/')
-dataframe_master = pd.read_csv(os.path.join('./data/horseInformation/', latest_file))
-df = ds.reformat_horse_info(dataframe_master)
-ds.save_horse_info(df)
-print("hello world")
+horse_df = ds.get_horse_details()
+
 
 

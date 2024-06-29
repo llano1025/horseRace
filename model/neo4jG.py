@@ -1,10 +1,19 @@
 import pandas as pd
+import data.data_scrapper as ds
+import os
 from neo4j import GraphDatabase
 
 # Load the CSV file
-file_path = 'G:/Git/horseRace/data/pastRaceResult/2024.06.17_race_result.csv'
-df = pd.read_csv(file_path)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+result_folder_path = os.path.join(script_dir, '..', 'data/pastRaceResult/')
+latest_result = ds.get_latest_csv(result_folder_path)
+df = pd.read_csv(os.path.join(result_folder_path, latest_result))
 df = df.dropna(subset=['Pla.'])
+
+info_folder_path = os.path.join(script_dir, '..', 'data/horseInformation/')
+latest_horseinfo = ds.get_latest_csv(info_folder_path)
+df2 = pd.read_csv(os.path.join(info_folder_path, latest_horseinfo))
+
 uri = "bolt://localhost:7687"  # Update this with your Neo4j instance URI
 user = "neo4j"  # Your Neo4j username
 password = "password"  # Your Neo4j password
@@ -29,6 +38,15 @@ def create_horse(tx, horses):
         tx.run("""
         MERGE (h:Horse {horse_name: $horse_name})
         """, horse_name=horse['horse_name'])
+
+
+def merge_horse(tx, horses):
+    for horse in horses:
+        tx.run("""
+        MATCH (h:Horse {horse_name: $horse_name})
+        SET h.origin = $origin, h.sex = $sex, 
+              h.colour = $colour
+        """, horse_name=horse['horse_name'], origin=horse['origin'], sex=horse['sex'], colour=horse['colour'])
 
 
 def create_jockey(tx, jockeys):
@@ -66,13 +84,14 @@ def split_into_batches(data, batch_size):
 
 
 # Main function to execute the batching process
-def load_data_to_neo4j(df, batch_size=100):
+def load_data_to_neo4j(df, df2, batch_size=100):
     with driver.session() as session:
         races = []
         horses = []
         jockeys = []
         trainers = []
         relationships = []
+        horses_info = []
 
         for index, row in df.iterrows():
             race = {
@@ -118,13 +137,28 @@ def load_data_to_neo4j(df, batch_size=100):
                 trainers = []
                 relationships = []
 
+        for index, row in df2.iterrows():
+
+            horse_info = {
+                "horse_name": row['Horse'],
+                "origin": row['Country of Origin'],
+                "sex": row['Sex'],
+                "colour": row['Color']
+            }
+            horses_info.append(horse_info)
+
+            if len(horses_info) >= batch_size:
+                session.write_transaction(merge_horse, horses_info)
+                horses_info = []
+
         if races:
             session.write_transaction(create_race, races)
             session.write_transaction(create_horse, horses)
             session.write_transaction(create_jockey, jockeys)
             session.write_transaction(create_trainer, trainers)
             session.write_transaction(create_race_result_relationship, relationships)
+            session.write_transaction(merge_horse, horses_info)
 
 
 # Load the data into Neo4j
-load_data_to_neo4j(df, batch_size=100)
+load_data_to_neo4j(df, df2, batch_size=100)
