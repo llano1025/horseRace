@@ -282,7 +282,6 @@ def get_horse_details():
     current_year = datetime.now().year
     years = list(range(current_year, 2017, -1))
     df_list = []
-    i = 0
 
     for brand_no in brand_numbers:
         for year in years:
@@ -343,11 +342,6 @@ def get_horse_details():
                 df_list.append(pd.DataFrame([horse_data]))
                 if horse_data:
                     break  # Exit the inner loop if data is found and appended
-        i = i + 1
-        if i % 50 == 0:
-            horse_df = pd.concat(df_list)
-            horse_df = reformat_horse_info(horse_df)
-            save_horse_info(horse_df, IS_MERGE_REQ)
 
     horse_df = pd.concat(df_list)
     horse_df = reformat_horse_info(horse_df)

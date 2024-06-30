@@ -35,11 +35,12 @@ def query_to_dataframe(query):
 # Query to extract data
 query = """
 MATCH (h:Horse)-[p:PARTICIPATED_IN]->(r:Race)
-OPTIONAL MATCH (j:Jockey)-[:RIDDEN]->(h)
-OPTIONAL MATCH (t:Trainer)-[:TRAINED]->(h)
+MATCH (j:Jockey)-[q:RIDDEN]->(h)
+MATCH (t:Trainer)-[s:TRAINED]->(h)
+MATCH (r:Race)
 WHERE r.date > date("2024-06-01")
-RETURN h, p, r, j, t
-LIMIT 25
+RETURN h, p, r, j, t, q, s, p.placement AS placement, p.horse_weight AS horse_weight, p.draw AS draw
+ORDER BY r.date ASC
 """
 
 # Get the result as a DataFrame
@@ -50,13 +51,13 @@ G = nx.Graph()
 
 # Add nodes and edges to the graph
 for index, row in data.iterrows():
-    G.add_node(row['h']['horse_name'], entity='horse', sex=row['h']['horse_sex'], origin=row['h']['horse_origin'], colour=row['h']['horse_colour'])
-    G.add_node(row[0]['r.race_name'], entity='race', date=row[0]['r.race_date'], location=row[0]['r.race_location'], course=row[0]['r.race_course'], distance=row[0]['r.race_distance'], condition=row[0]['r.race_condition'], class_=row[0]['r.race_class'])
-    G.add_node(row[0]['j.jockey_name'], entity='jockey')
-    G.add_node(row[0]['t.trainer_name'], entity='trainer')
-    G.add_edge(row[0]['h.horse_name'], row[0]['r.race_name'], placement=row[0]['p.race_placement'], weight=row[0]['p.horse_weight'], draw=row[0]['p.race_draw'])
-    G.add_edge(row[0]['j.jockey_name'], row[0]['h.horse_name'], relation='ridden')
-    G.add_edge(row[0]['t.trainer_name'], row[0]['h.horse_name'], relation='trained')
+    G.add_node(row['h']['horse_name'], entity='horse', sex=row['h']['sex'], origin=row['h']['origin'], colour=row['h']['colour'])
+    G.add_node(row['r']['race_name'], entity='race', date=row['r']['date'], location=row['r']['location'], course=row['r']['course'], distance=row['r']['distance'], condition=row['r']['condition'], class_=row['r']['class'])
+    G.add_node(row['j']['jockey_name'], entity='jockey')
+    G.add_node(row['t']['trainer_name'], entity='trainer')
+    G.add_edge(row['p'][0]['horse_name'], row['p'][2]['race_name'], placement=row['placement'], weight=row['horse_weight'], draw=row['draw'])
+    G.add_edge(row['q'][0]['jockey_name'], row['q'][2]['horse_name'], relation='ridden')
+    G.add_edge(row['s'][0]['trainer_name'], row['s'][2]['horse_name'], relation='trained')
 
 # Convert NetworkX graph to PyTorch Geometric Data object
 data = Data.from_networkx(G)
@@ -81,6 +82,7 @@ class RacePlacementGNN(torch.nn.Module):
         x = F.relu(x)
         x = self.fc2(x)
         return x
+
 
 model = RacePlacementGNN()
 

@@ -36,17 +36,18 @@ def create_race(tx, races):
 def create_horse(tx, horses):
     for horse in horses:
         tx.run("""
-        MERGE (h:Horse {horse_name: $horse_name})
-        """, horse_name=horse['horse_name'])
+        MERGE (h:Horse {horse_id: $horse_id})
+        ON CREATE SET h.horse_name = $horse_name
+        """, horse_id=horse['horse_id'], horse_name=horse['horse_name'])
 
 
 def merge_horse(tx, horses):
     for horse in horses:
         tx.run("""
-        MATCH (h:Horse {horse_name: $horse_name})
+        MATCH (h:Horse {horse_id: $horse_id})
         SET h.origin = $origin, h.sex = $sex, 
               h.colour = $colour
-        """, horse_name=horse['horse_name'], origin=horse['origin'], sex=horse['sex'], colour=horse['colour'])
+        """, horse_id=horse['horse_id'], origin=horse['origin'], sex=horse['sex'], colour=horse['colour'])
 
 
 def create_jockey(tx, jockeys):
@@ -66,12 +67,12 @@ def create_trainer(tx, trainers):
 def create_race_result_relationship(tx, relationships):
     for relationship in relationships:
         tx.run("""
-        MATCH (r:Race {race_name: $race_name}), (h:Horse {horse_name: $horse_name}), 
+        MATCH (r:Race {race_name: $race_name}), (h:Horse {horse_id: $horse_id}), 
               (j:Jockey {jockey_name: $jockey_name}), (t:Trainer {trainer_name: $trainer_name})
         MERGE (h)-[:PARTICIPATED_IN {placement: $placement, draw: $draw, horse_weight: $horse_weight}]->(r)
         MERGE (j)-[:RIDDEN]->(h)
         MERGE (t)-[:TRAINED]->(h)
-        """, race_name=relationship['race_name'], horse_name=relationship['horse_name'],
+        """, race_name=relationship['race_name'], horse_id=relationship['horse_id'],
                jockey_name=relationship['jockey_name'], trainer_name=relationship['trainer_name'],
                placement=relationship['placement'], draw=relationship['draw'],
                horse_weight=relationship['horse_weight'])
@@ -105,7 +106,9 @@ def load_data_to_neo4j(df, df2, batch_size=100):
             }
             races.append(race)
 
-            horse = {"horse_name": row['Horse']}
+            horse = {
+                'horse_id': row['Brand No.'],
+                "horse_name": row['Horse']}
             horses.append(horse)
 
             jockey = {"jockey_name": row['Jockey']}
@@ -116,7 +119,7 @@ def load_data_to_neo4j(df, df2, batch_size=100):
 
             relationship = {
                 "race_name": race["race_name"],
-                "horse_name": row['Horse'],
+                'horse_id': row['Brand No.'],
                 "jockey_name": row['Jockey'],
                 "trainer_name": row['Trainer'],
                 "placement": row['Pla.'],
@@ -140,7 +143,7 @@ def load_data_to_neo4j(df, df2, batch_size=100):
         for index, row in df2.iterrows():
 
             horse_info = {
-                "horse_name": row['Horse'],
+                'horse_id': row['Brand No.'],
                 "origin": row['Country of Origin'],
                 "sex": row['Sex'],
                 "colour": row['Color']
