@@ -355,6 +355,17 @@ def get_horse_details():
     return horse_df
 
 
+def reformat_time(df):
+    # Parse the original strings and convert to datetime format
+    df = df.dropna(subset=['Pla.'])
+    df = df.drop(df[df['Pla.'] == 'VOID'].index)
+    df['Race Date'] = pd.to_datetime(df['Race Date'], format='%d/%m/%Y')
+
+    # Format the datetime objects as strings in the desired format
+    df['Race Date'] = df['Race Date'].dt.strftime('%Y-%m-%d')
+    return df
+
+
 def reformat_horse_info(df):
     # Extract the parts with three sets of parentheses
     df[['Horse', 'Brand No.', 'Status']] = df['Horse Name and ID'].str.extract(r'(.+?)\s+\((.+?)\)(?:\s+\((.+?)\))?')
@@ -369,6 +380,27 @@ def reformat_horse_info(df):
     df[['Color', 'Sex']] = df['Colour / Sex'].str.split(' / ', 1, expand=True)
     df['Sex'] = df['Sex'].apply(lambda x: x.split(' / ')[-1] if ' / ' in x else x)
     return df
+
+
+def save_dataframe_to_csv(dataframe, path, IS_MERGE_REQ):
+    try:
+        #  Check if merge with existing data is required
+        if IS_MERGE_REQ:
+            latest_file = get_latest_csv(path)
+            dataframe_master = pd.read_csv(os.path.join(path, latest_file))
+            dataframe = pd.concat([dataframe, dataframe_master])
+
+        # Create the directory if it does not exist
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        dataframe = reformat_time(dataframe)
+
+        # Save the DataFrame to a CSV file
+        current_date = datetime.now().strftime("%Y.%m.%d")
+        dataframe.to_csv(os.path.join(path, f'{current_date}_race_result.csv'), index=False)
+        print(f"DataFrame successfully saved to {path}")
+
+    except Exception as e:
+        print(f"An error occurred while saving the DataFrame: {e}")
 
 
 def save_horse_info(horse_df, IS_MERGE_REQ):
@@ -437,26 +469,6 @@ def get_updated_dates(directory, dates_list):
     else:
         print("No CSV files found in the directory.")
         return dates_list, False
-
-
-def save_dataframe_to_csv(dataframe, path, IS_MERGE_REQ):
-    try:
-        #  Check if merge with existing data is required
-        if IS_MERGE_REQ:
-            latest_file = get_latest_csv(path)
-            dataframe_master = pd.read_csv(os.path.join(path, latest_file))
-            dataframe = pd.concat([dataframe, dataframe_master])
-
-        # Create the directory if it does not exist
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-
-        # Save the DataFrame to a CSV file
-        current_date = datetime.now().strftime("%Y.%m.%d")
-        dataframe.to_csv(os.path.join(path, f'{current_date}_race_result.csv'), index=False)
-        print(f"DataFrame successfully saved to {path}")
-
-    except Exception as e:
-        print(f"An error occurred while saving the DataFrame: {e}")
 
 
 def save_past_race_result():
