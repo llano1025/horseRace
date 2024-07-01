@@ -1,9 +1,7 @@
-from py2neo import Graph
-import pandas as pd
 import networkx as nx
 import torch
 import torch.nn.functional as F
-from torch_geometric.data import Data
+from torch_geometric.utils import from_networkx
 from torch_geometric.nn import GCNConv
 from torch_geometric.loader import DataLoader
 from neo4j import GraphDatabase
@@ -55,12 +53,31 @@ for index, row in data.iterrows():
     G.add_node(row['r']['race_name'], entity='race', date=row['r']['date'], location=row['r']['location'], course=row['r']['course'], distance=row['r']['distance'], condition=row['r']['condition'], class_=row['r']['class'])
     G.add_node(row['j']['jockey_name'], entity='jockey')
     G.add_node(row['t']['trainer_name'], entity='trainer')
-    G.add_edge(row['p'][0]['horse_name'], row['p'][2]['race_name'], placement=row['placement'], weight=row['horse_weight'], draw=row['draw'])
+    G.add_edge(row['p'][0]['horse_name'], row['p'][2]['race_name'], relation='participated', weight=row['horse_weight'], draw=row['draw'])
     G.add_edge(row['q'][0]['jockey_name'], row['q'][2]['horse_name'], relation='ridden')
     G.add_edge(row['s'][0]['trainer_name'], row['s'][2]['horse_name'], relation='trained')
 
+
+def normalize_node_attributes(G, required_attrs):
+    for node, attrs in G.nodes(data=True):
+        for attr in required_attrs:
+            if attr not in attrs:
+                G.nodes[node][attr] = 0
+
+
+def normalize_edge_attributes(G, required_attrs):
+    for u, v, attrs in G.edges(data=True):
+        for attr in required_attrs:
+            if attr not in attrs:
+                G.edges[u, v][attr] = 0
+
+
 # Convert NetworkX graph to PyTorch Geometric Data object
-data = Data.from_networkx(G)
+node_attrs = ['entity', 'sex', 'origin', 'colour', 'date', 'location', 'course', 'distance', 'condition', 'class_']
+edge_attrs = ['relation', 'weight', 'draw']
+normalize_node_attributes(G, node_attrs)
+normalize_edge_attributes(G, edge_attrs)
+data = from_networkx(G)
 
 
 class RacePlacementGNN(torch.nn.Module):

@@ -280,7 +280,7 @@ def get_horse_details():
 
     # Generate years from the current year to 2018
     current_year = datetime.now().year
-    years = list(range(current_year, 2017, -1))
+    years = list(range(current_year, 2015, -1))
     df_list = []
 
     for brand_no in brand_numbers:
