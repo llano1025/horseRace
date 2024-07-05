@@ -382,11 +382,11 @@ def save_dataframe_to_csv(dataframe, path, IS_MERGE_REQ):
         if IS_MERGE_REQ:
             latest_file = get_latest_csv(path)
             dataframe_master = pd.read_csv(os.path.join(path, latest_file))
+            dataframe = reformat_time(dataframe)
             dataframe = pd.concat([dataframe, dataframe_master])
 
         # Create the directory if it does not exist
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        dataframe = reformat_time(dataframe)
 
         # Save the DataFrame to a CSV file
         current_date = datetime.now().strftime("%Y.%m.%d")
