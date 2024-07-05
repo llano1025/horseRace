@@ -3,23 +3,6 @@ import data.data_scrapper as ds
 import os
 from neo4j import GraphDatabase
 
-# Load the CSV file
-script_dir = os.path.dirname(os.path.abspath(__file__))
-result_folder_path = os.path.join(script_dir, '..', 'data/pastRaceResult/')
-latest_result = ds.get_latest_csv(result_folder_path)
-df = pd.read_csv(os.path.join(result_folder_path, latest_result))
-df = df.dropna(subset=['Pla.'])
-
-info_folder_path = os.path.join(script_dir, '..', 'data/horseInformation/')
-latest_horseinfo = ds.get_latest_csv(info_folder_path)
-df2 = pd.read_csv(os.path.join(info_folder_path, latest_horseinfo))
-
-uri = "bolt://localhost:7687"  # Update this with your Neo4j instance URI
-user = "neo4j"  # Your Neo4j username
-password = "password"  # Your Neo4j password
-
-driver = GraphDatabase.driver(uri, auth=(user, password))
-
 
 # Functions to create nodes and relationships
 def create_race(tx, races):
@@ -85,7 +68,7 @@ def split_into_batches(data, batch_size):
 
 
 # Main function to execute the batching process
-def load_data_to_neo4j(df, df2, batch_size=100):
+def load_data_to_neo4j(df, df2, driver, batch_size=100):
     with driver.session() as session:
         races = []
         horses = []
@@ -163,5 +146,23 @@ def load_data_to_neo4j(df, df2, batch_size=100):
             session.write_transaction(merge_horse, horses_info)
 
 
-# Load the data into Neo4j
-load_data_to_neo4j(df, df2, batch_size=100)
+def load_to_neo4j():
+    # Load the CSV file
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    result_folder_path = os.path.join(script_dir, '..', 'data/pastRaceResult/')
+    latest_result = ds.get_latest_csv(result_folder_path)
+    df = pd.read_csv(os.path.join(result_folder_path, latest_result))
+    df = df.dropna(subset=['Pla.'])
+
+    info_folder_path = os.path.join(script_dir, '..', 'data/horseInformation/')
+    latest_horseinfo = ds.get_latest_csv(info_folder_path)
+    df2 = pd.read_csv(os.path.join(info_folder_path, latest_horseinfo))
+
+    uri = "bolt://localhost:7687"  # Update this with your Neo4j instance URI
+    user = "neo4j"  # Your Neo4j username
+    password = "password"  # Your Neo4j password
+
+    driver = GraphDatabase.driver(uri, auth=(user, password))
+
+    # Load the data into Neo4j
+    load_data_to_neo4j(df, df2, driver, batch_size=100)

@@ -346,7 +346,6 @@ def get_horse_details():
     horse_df = pd.concat(df_list)
     horse_df = reformat_horse_info(horse_df)
     save_horse_info(horse_df, IS_MERGE_REQ)
-    return horse_df
 
 
 def reformat_time(df):
