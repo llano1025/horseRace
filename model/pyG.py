@@ -15,100 +15,10 @@ from sklearn.multioutput import MultiOutputClassifier
 from torch_geometric.data import Batch
 from torch_geometric.loader import DataLoader, LinkNeighborLoader
 from torch_geometric.nn import GraphSAGE
-# # Replace with your Neo4j connection details
-# uri = "bolt://localhost:7687"
-# user = "neo4j"
-# password = "password"
-#
-# # Create a Neo4j driver instance
-# driver = GraphDatabase.driver(uri, auth=(user, password))
-#
-#
-#
-#
-# def query_to_dataframe(query):
-#     with driver.session() as session:
-#         # Execute the Cypher query
-#         result = session.run(query)
-#
-#         # Convert the result to a list of dictionaries
-#         data = [record.data() for record in result]
-#
-#         # Convert the list of dictionaries to a DataFrame
-#         df = pd.DataFrame(data)
-#
-#         return df
-#
-#
-# # Query to extract data
-# query = """
-# MATCH (h:Horse)-[p:PARTICIPATED_IN]->(r:Race)
-# MATCH (j:Jockey)-[q:RIDDEN]->(h)
-# MATCH (t:Trainer)-[s:TRAINED]->(h)
-# MATCH (r:Race)
-# WHERE r.date > date("2024-06-01")
-# RETURN h, p, r, j, t, q, s, p.placement AS placement, p.horse_weight AS horse_weight, p.draw AS draw
-# ORDER BY r.date ASC
-# """
-#
-# # Get the result as a DataFrame
-# data = query_to_dataframe(query)
-#
-# # Create a NetworkX graph from the data
-# G = nx.Graph()
-#
-# # Add nodes and edges to the graph
-# for index, row in data.iterrows():
-#     G.add_node(row['h']['horse_name'], entity='horse', sex=row['h']['sex'], origin=row['h']['origin'], colour=row['h']['colour'])
-#     G.add_node(row['r']['race_name'], entity='race', date=row['r']['date'], location=row['r']['location'], course=row['r']['course'], distance=row['r']['distance'], condition=row['r']['condition'], class_=row['r']['class'])
-#     G.add_node(row['j']['jockey_name'], entity='jockey')
-#     G.add_node(row['t']['trainer_name'], entity='trainer')
-#     G.add_edge(row['p'][0]['horse_name'], row['p'][2]['race_name'], relation='participated', weight=row['horse_weight'], draw=row['draw'])
-#     G.add_edge(row['q'][0]['jockey_name'], row['q'][2]['horse_name'], relation='ridden')
-#     G.add_edge(row['s'][0]['trainer_name'], row['s'][2]['horse_name'], relation='trained')
-#
-#
-# def normalize_node_attributes(G, required_attrs):
-#     for node, attrs in G.nodes(data=True):
-#         for attr in required_attrs:
-#             if attr not in attrs:
-#                 G.nodes[node][attr] = 0
-#
-#
-# def normalize_edge_attributes(G, required_attrs):
-#     for u, v, attrs in G.edges(data=True):
-#         for attr in required_attrs:
-#             if attr not in attrs:
-#                 G.edges[u, v][attr] = 0
-#
-#
-# # Convert NetworkX graph to PyTorch Geometric Data object
-# node_attrs = ['entity', 'sex', 'origin', 'colour', 'date', 'location', 'course', 'distance', 'condition', 'class_']
-# edge_attrs = ['relation', 'weight', 'draw']
-# normalize_node_attributes(G, node_attrs)
-# normalize_edge_attributes(G, edge_attrs)
-#
-# # Convert NetworkX graph to PyTorch Geometric Data object
-# data = from_networkx(G)
-
-# # Ensure the node feature matrix `x` is set correctly
-# node_attrs = ['sex', 'origin', 'colour', 'date', 'location', 'course', 'distance', 'condition', 'class_']
-# node_features = []
-# for attr in node_attrs:
-#     node_features.append([attrs.get(attr, 0) for _, attrs in G.nodes(data=True)])
-#
-# data.x = torch.tensor(node_features, dtype=torch.float).t()
-#
-# # Ensure the edge weight matrix `edge_weight` is set correctly if required
-# edge_attrs = ['weight', 'draw']
-# edge_features = []
-# for attr in edge_attrs:
-#     edge_features.append([attrs.get(attr, 0) for _, _, attrs in G.edges(data=True)])
-#
-# data.edge_attr = torch.tensor(edge_features, dtype=torch.float).t()
-#
-# # Check the attributes
-# print(data)
+import networkx as nx
+import numpy as np
+import torch
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
 class HorseRacingDataset(InMemoryDataset):
@@ -146,9 +56,8 @@ class HorseRacingDataset(InMemoryDataset):
         for index, row in data.iterrows():
             G.add_node(row['h']['horse_name'], entity='horse', sex=row['h']['sex'], origin=row['h']['origin'],
                        colour=row['h']['colour'])
-            G.add_node(row['r']['race_name'], entity='race', date=row['r']['date'], location=row['r']['location'],
-                       course=row['r']['course'], distance=row['r']['distance'], condition=row['r']['condition'],
-                       class_=row['r']['class'])
+            G.add_node(row['r']['race_name'], entity='race', location=row['r']['location'], course=row['r']['course'],
+                       distance=row['r']['distance'], condition=row['r']['condition'], class_=row['r']['class'])
             G.add_node(row['j']['jockey_name'], entity='jockey')
             G.add_node(row['t']['trainer_name'], entity='trainer')
             G.add_edge(row['p'][0]['horse_name'], row['p'][2]['race_name'], relation='participated',
@@ -163,6 +72,10 @@ class HorseRacingDataset(InMemoryDataset):
 
         # Convert NetworkX graph to PyTorch Geometric Data object
         data = from_networkx(G)
+        node_features = self.convert_node_attributes_to_features(G)
+        data.node_attr = node_features
+        edge_features = self.convert_edge_attributes_to_features(G)
+        data.edge_attr = edge_features
 
         # If there's only one graph, we need to make it a list
         data_list = [data]
@@ -201,6 +114,106 @@ class HorseRacingDataset(InMemoryDataset):
             df = pd.DataFrame(data)
 
             return df
+
+    def convert_node_attributes_to_features(self, G):
+        # Collect all unique attributes
+        all_attributes = set()
+        for _, attrs in G.nodes(data=True):
+            all_attributes.update(attrs.keys())
+
+        # Step 2: Create a feature matrix
+        feature_matrix = []
+        for node, attrs in G.nodes(data=True):
+            node_features = []
+            for attr in all_attributes:
+                value = attrs.get(attr, None)
+                node_features.append(value)
+            feature_matrix.append(node_features)
+
+        # Convert to numpy array
+        feature_matrix = np.array(feature_matrix)
+
+        # Handle different data types
+        numeric_features = []
+        categorical_features = []
+
+        for i, attr in enumerate(all_attributes):
+            column = feature_matrix[:, i]
+            if np.issubdtype(column.dtype, np.number):
+                numeric_features.append(i)
+            else:
+                categorical_features.append(i)
+
+        # Process numeric features
+        if numeric_features:
+            scaler = StandardScaler()
+            feature_matrix[:, numeric_features] = scaler.fit_transform(feature_matrix[:, numeric_features])
+
+        # Process categorical features
+        if categorical_features:
+            encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
+            encoded_categoricals = encoder.fit_transform(feature_matrix[:, categorical_features])
+
+            # Combine numeric and one-hot encoded features
+            if numeric_features:
+                feature_matrix = np.hstack([feature_matrix[:, numeric_features], encoded_categoricals])
+            else:
+                feature_matrix = encoded_categoricals
+
+        # Convert to PyTorch tensor
+        node_features = torch.FloatTensor(feature_matrix)
+
+        return node_features
+
+    def convert_edge_attributes_to_features(self, G):
+        # Collect all unique edge attributes
+        all_attributes = set()
+        for _, _, attrs in G.edges(data=True):
+            all_attributes.update(attrs.keys())
+
+        # Create a feature matrix
+        feature_matrix = []
+        for _, _, attrs in G.edges(data=True):
+            edge_features = []
+            for attr in all_attributes:
+                value = attrs.get(attr, None)
+                edge_features.append(value)
+            feature_matrix.append(edge_features)
+
+        # Convert to numpy array
+        feature_matrix = np.array(feature_matrix)
+
+        # Step 3: Handle different data types
+        numeric_features = []
+        categorical_features = []
+
+        for i, attr in enumerate(all_attributes):
+            column = feature_matrix[:, i]
+            if np.issubdtype(column.dtype, np.number):
+                numeric_features.append(i)
+            else:
+                categorical_features.append(i)
+
+        # Process numeric features
+        if numeric_features:
+            scaler = StandardScaler()
+            feature_matrix[:, numeric_features] = scaler.fit_transform(feature_matrix[:, numeric_features])
+
+        # Process categorical features
+        if categorical_features:
+            encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
+            encoded_categoricals = encoder.fit_transform(feature_matrix[:, categorical_features])
+
+            # Combine numeric and one-hot encoded features
+            if numeric_features:
+                feature_matrix = np.hstack([feature_matrix[:, numeric_features], encoded_categoricals])
+            else:
+                feature_matrix = encoded_categoricals
+
+        # Convert to PyTorch tensor
+        edge_features = torch.FloatTensor(feature_matrix)
+
+        return edge_features
 
 
 # Usage
