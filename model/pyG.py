@@ -66,7 +66,7 @@ class HorseRacingDataset(InMemoryDataset):
             G.add_edge(row['s'][0]['trainer_name'], row['s'][2]['horse_name'], relation='trained')
 
         self.normalize_node_attributes(G,
-                                       ['entity', 'sex', 'origin', 'colour', 'date', 'location', 'course', 'distance',
+                                       ['entity', 'sex', 'origin', 'colour', 'location', 'course', 'distance',
                                         'condition', 'class_'])
         self.normalize_edge_attributes(G, ['relation', 'weight', 'draw'])
 
