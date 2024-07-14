@@ -50,15 +50,22 @@ def create_trainer(tx, trainers):
 def create_race_result_relationship(tx, relationships):
     for relationship in relationships:
         tx.run("""
-        MATCH (r:Race {race_name: $race_name}), (h:Horse {horse_id: $horse_id}), 
-              (j:Jockey {jockey_name: $jockey_name}), (t:Trainer {trainer_name: $trainer_name})
-        MERGE (h)-[:PARTICIPATED_IN {placement: $placement, draw: $draw, horse_weight: $horse_weight}]->(r)
-        MERGE (j)-[:RIDDEN]->(h)
-        MERGE (t)-[:TRAINED]->(h)
+        MATCH (r:Race {race_name: $race_name}), (h:Horse {horse_id: $horse_id})
+        MERGE (h)-[:PARTICIPATED_IN {placement: $placement, draw: $draw, horse_weight: $horse_weight, jockey_name: $jockey_name, 
+                trainer_name: $trainer_name}]->(r)
         """, race_name=relationship['race_name'], horse_id=relationship['horse_id'],
                jockey_name=relationship['jockey_name'], trainer_name=relationship['trainer_name'],
-               placement=relationship['placement'], draw=relationship['draw'],
-               horse_weight=relationship['horse_weight'])
+               placement=relationship['placement'], draw=relationship['draw'], horse_weight=relationship['horse_weight'])
+
+        # MERGE (j)-[:RIDDEN]->(h)
+        # MERGE (t)-[:TRAINED]->(h)
+
+
+def format_race_result_relationship(tx):
+    tx.run("""
+    MATCH (r:Race)
+    SET r.date = date(r.date)
+    """)
 
 
 # Helper function to split data into batches
@@ -114,13 +121,13 @@ def load_data_to_neo4j(df, df2, driver, batch_size=100):
             if len(races) >= batch_size:
                 session.write_transaction(create_race, races)
                 session.write_transaction(create_horse, horses)
-                session.write_transaction(create_jockey, jockeys)
-                session.write_transaction(create_trainer, trainers)
+                # session.write_transaction(create_jockey, jockeys)
+                # session.write_transaction(create_trainer, trainers)
                 session.write_transaction(create_race_result_relationship, relationships)
                 races = []
                 horses = []
-                jockeys = []
-                trainers = []
+                # jockeys = []
+                # trainers = []
                 relationships = []
 
         for index, row in df2.iterrows():
@@ -140,10 +147,11 @@ def load_data_to_neo4j(df, df2, driver, batch_size=100):
         if races:
             session.write_transaction(create_race, races)
             session.write_transaction(create_horse, horses)
-            session.write_transaction(create_jockey, jockeys)
-            session.write_transaction(create_trainer, trainers)
+            # session.write_transaction(create_jockey, jockeys)
+            # session.write_transaction(create_trainer, trainers)
             session.write_transaction(create_race_result_relationship, relationships)
             session.write_transaction(merge_horse, horses_info)
+            session.write_transaction(format_race_result_relationship)
 
 
 def load_to_neo4j():

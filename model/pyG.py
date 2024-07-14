@@ -38,19 +38,21 @@ class HorseRacingDataset(InMemoryDataset):
         # Query to extract data
         query = """
         MATCH (h:Horse)-[p:PARTICIPATED_IN]->(r:Race)
-        MATCH (j:Jockey)-[q:RIDDEN]->(h)
-        MATCH (t:Trainer)-[s:TRAINED]->(h)
         MATCH (r:Race)
         WHERE r.date > date("2024-06-01")
-        RETURN h, p, r, j, t, q, s, p.placement AS placement, p.horse_weight AS horse_weight, p.draw AS draw
+        RETURN h, p, r, p.placement AS placement, p.horse_weight AS horse_weight, p.draw AS draw, 
+        p.jockey_name AS jockey_name, p.trainer_name AS trainer_name
         ORDER BY r.date ASC
         """
+        # MATCH (j:Jockey)-[q:RIDDEN]->(h)
+        # MATCH (t:Trainer)-[s:TRAINED]->(h)
 
         # Get the result as a DataFrame
         data = self.query_to_dataframe(query)
 
         # Create a NetworkX graph from the data
         G = nx.Graph()
+        y = data['placement'].tolist()
 
         # Add nodes and edges to the graph
         for index, row in data.iterrows():
@@ -58,12 +60,9 @@ class HorseRacingDataset(InMemoryDataset):
                        colour=row['h']['colour'])
             G.add_node(row['r']['race_name'], entity='race', location=row['r']['location'], course=row['r']['course'],
                        distance=row['r']['distance'], condition=row['r']['condition'], class_=row['r']['class'])
-            G.add_node(row['j']['jockey_name'], entity='jockey')
-            G.add_node(row['t']['trainer_name'], entity='trainer')
             G.add_edge(row['p'][0]['horse_name'], row['p'][2]['race_name'], relation='participated',
-                       weight=row['horse_weight'], draw=row['draw'])
-            G.add_edge(row['q'][0]['jockey_name'], row['q'][2]['horse_name'], relation='ridden')
-            G.add_edge(row['s'][0]['trainer_name'], row['s'][2]['horse_name'], relation='trained')
+                       weight=row['horse_weight'], draw=row['draw'], jockey=row['jockey_name'],
+                       trainer=row['trainer_name'])
 
         self.normalize_node_attributes(G,
                                        ['entity', 'sex', 'origin', 'colour', 'location', 'course', 'distance',
@@ -73,9 +72,10 @@ class HorseRacingDataset(InMemoryDataset):
         # Convert NetworkX graph to PyTorch Geometric Data object
         data = from_networkx(G)
         node_features = self.convert_node_attributes_to_features(G)
-        data.node_attr = node_features
+        data.x = node_features
         edge_features = self.convert_edge_attributes_to_features(G)
         data.edge_attr = edge_features
+        data.y = self.convert_to_data_y(y)
 
         # If there's only one graph, we need to make it a list
         data_list = [data]
@@ -183,7 +183,7 @@ class HorseRacingDataset(InMemoryDataset):
         # Convert to numpy array
         feature_matrix = np.array(feature_matrix)
 
-        # Step 3: Handle different data types
+        # Handle different data types
         numeric_features = []
         categorical_features = []
 
@@ -214,6 +214,20 @@ class HorseRacingDataset(InMemoryDataset):
         edge_features = torch.FloatTensor(feature_matrix)
 
         return edge_features
+
+    def convert_to_data_y(self, y):
+
+        # Convert to numpy array
+        label_array = np.array(y).reshape(-1, 1)
+
+        # For Label Encoding (if you want integer labels)
+        encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
+        encoded_labels = encoder.fit_transform(label_array)
+
+        # Convert to PyTorch tensor
+        y = torch.tensor(encoded_labels, dtype=torch.long)
+
+        return y
 
 
 # Usage
